@@ -1,14 +1,21 @@
-"""Loss computation, evaluation, and sampling helpers for training."""
-
 import torch
 from ..inference.generate import generate_text_simple
 from ..tokenizer.tokenizer import text_to_token_ids, token_ids_to_text
 
-def calc_loss_batch(input_batch, target_batch, model, device):
+def get_device():
+    """Pick the best available device: CUDA > Apple MPS > CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+def calc_loss_batch(input_batch, target_batch, model, device, ignore_index=-100):
+    """Cross-entropy loss; ignore_index (-100) positions contribute nothing."""
     input_batch, target_batch = input_batch.to(device), target_batch.to(device)
     logits = model(input_batch)
     loss = torch.nn.functional.cross_entropy(
-        logits.flatten(0, 1), target_batch.flatten()
+        logits.flatten(0, 1), target_batch.flatten(), ignore_index=ignore_index
     )
     return loss
 
@@ -46,5 +53,5 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
             model=model, idx=encoded, max_new_tokens=50, context_size=context_size
         )
     decoded_text = token_ids_to_text(token_ids, tokenizer)
-    print(decoded_text.replace("\n", " "))  # Compact print format
+    print(decoded_text.replace("\n", " "))
     model.train()

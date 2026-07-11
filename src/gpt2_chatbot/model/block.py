@@ -28,9 +28,9 @@ class FeedForward(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]),  # Expansion
-            GELU(),                                          # Activation
-            nn.Linear(4 * cfg["emb_dim"], cfg["emb_dim"]),  # Contraction
+            nn.Linear(cfg["emb_dim"], 4 * cfg["emb_dim"]),
+            GELU(),
+            nn.Linear(4 * cfg["emb_dim"], cfg["emb_dim"]),
         )
 
     def forward(self, x):
@@ -53,14 +53,12 @@ class TransformerBlock(nn.Module):
         self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
 
     def forward(self, x):
-        # Shortcut connection for the attention block.
         shortcut = x
         x = self.norm1(x)
         x = self.att(x)
         x = self.drop_shortcut(x)
         x = x + shortcut
 
-        # Shortcut connection for the feed-forward block.
         shortcut = x
         x = self.norm2(x)
         x = self.ff(x)

@@ -1,7 +1,10 @@
+# Core (used by the package and scripts)
 torch>=2.0
 tiktoken>=0.5
+transformers>=4.40      # pretrained GPT-2 weight loading
+pyyaml>=6.0             # config files (configs/*.yaml)
+
+# Notebook / plotting extras (optional)
 numpy>=1.24
-tqdm>=4.66
 matplotlib>=3.7
-# Only needed to download/convert the official OpenAI GPT-2 checkpoints:
-tensorflow>=2.15.0
+tqdm>=4.66

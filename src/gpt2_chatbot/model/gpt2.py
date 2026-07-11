@@ -20,7 +20,7 @@ class GPTModel(nn.Module):
         batch_size, seq_len = in_idx.shape
         tok_embeds = self.tok_emb(in_idx)
         pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
-        x = tok_embeds + pos_embeds  # (batch_size, num_tokens, emb_dim)
+        x = tok_embeds + pos_embeds
         x = self.drop_emb(x)
         x = self.trf_blocks(x)
         x = self.final_norm(x)

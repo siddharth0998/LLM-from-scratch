@@ -1,57 +1,58 @@
-import numpy as np
 import torch
 
-def assign(left, right):
-    if left.shape != right.shape:
-        raise ValueError(f"Shape mismatch. Left: {left.shape}, Right: {right.shape}")
-    return torch.nn.Parameter(torch.tensor(right))
+HF_MODEL_CONFIGS = {
+    "gpt2": {"emb_dim": 768, "n_layers": 12, "n_heads": 12},
+    "gpt2-medium": {"emb_dim": 1024, "n_layers": 24, "n_heads": 16},
+    "gpt2-large": {"emb_dim": 1280, "n_layers": 36, "n_heads": 20},
+    "gpt2-xl": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
+}
 
-def load_weights_into_gpt(gpt, params):
-    gpt.pos_emb.weight = assign(gpt.pos_emb.weight, params["wpe"])
-    gpt.tok_emb.weight = assign(gpt.tok_emb.weight, params["wte"])
+def _assign(param, tensor):
+    """Return a Parameter from a torch tensor, validating the shape matches."""
+    if tuple(param.shape) != tuple(tensor.shape):
+        raise ValueError(f"Shape mismatch. Left: {tuple(param.shape)}, Right: {tuple(tensor.shape)}")
+    return torch.nn.Parameter(tensor.detach().clone())
 
-    for b in range(len(params["blocks"])):
-        block = params["blocks"][b]
+def load_hf_weights_into_gpt(gpt, hf_model=None, model_name="gpt2"):
+    """Copy HuggingFace GPT2LMHeadModel weights into gpt (built with qkv_bias=True,
+    context_length=1024)."""
+    if hf_model is None:
+        from transformers import GPT2LMHeadModel
+        hf_model = GPT2LMHeadModel.from_pretrained(model_name)
 
-        q_w, k_w, v_w = np.split(block["attn"]["c_attn"]["w"], 3, axis=-1)
-        gpt.trf_blocks[b].att.W_query.weight = assign(
-            gpt.trf_blocks[b].att.W_query.weight, q_w.T)
-        gpt.trf_blocks[b].att.W_key.weight = assign(
-            gpt.trf_blocks[b].att.W_key.weight, k_w.T)
-        gpt.trf_blocks[b].att.W_value.weight = assign(
-            gpt.trf_blocks[b].att.W_value.weight, v_w.T)
+    sd = hf_model.state_dict()
+    d = gpt.tok_emb.weight.shape[1]
 
-        q_b, k_b, v_b = np.split(block["attn"]["c_attn"]["b"], 3, axis=-1)
-        gpt.trf_blocks[b].att.W_query.bias = assign(
-            gpt.trf_blocks[b].att.W_query.bias, q_b)
-        gpt.trf_blocks[b].att.W_key.bias = assign(
-            gpt.trf_blocks[b].att.W_key.bias, k_b)
-        gpt.trf_blocks[b].att.W_value.bias = assign(
-            gpt.trf_blocks[b].att.W_value.bias, v_b)
+    gpt.tok_emb.weight = _assign(gpt.tok_emb.weight, sd["transformer.wte.weight"])
+    gpt.pos_emb.weight = _assign(gpt.pos_emb.weight, sd["transformer.wpe.weight"])
 
-        gpt.trf_blocks[b].att.out_proj.weight = assign(
-            gpt.trf_blocks[b].att.out_proj.weight, block["attn"]["c_proj"]["w"].T)
-        gpt.trf_blocks[b].att.out_proj.bias = assign(
-            gpt.trf_blocks[b].att.out_proj.bias, block["attn"]["c_proj"]["b"])
+    for b in range(len(gpt.trf_blocks)):
+        p = f"transformer.h.{b}."
+        blk = gpt.trf_blocks[b]
 
-        gpt.trf_blocks[b].ff.layers[0].weight = assign(
-            gpt.trf_blocks[b].ff.layers[0].weight, block["mlp"]["c_fc"]["w"].T)
-        gpt.trf_blocks[b].ff.layers[0].bias = assign(
-            gpt.trf_blocks[b].ff.layers[0].bias, block["mlp"]["c_fc"]["b"])
-        gpt.trf_blocks[b].ff.layers[2].weight = assign(
-            gpt.trf_blocks[b].ff.layers[2].weight, block["mlp"]["c_proj"]["w"].T)
-        gpt.trf_blocks[b].ff.layers[2].bias = assign(
-            gpt.trf_blocks[b].ff.layers[2].bias, block["mlp"]["c_proj"]["b"])
+        q_w, k_w, v_w = sd[p + "attn.c_attn.weight"].split(d, dim=1)
+        q_b, k_b, v_b = sd[p + "attn.c_attn.bias"].split(d, dim=0)
+        blk.att.W_query.weight = _assign(blk.att.W_query.weight, q_w.T)
+        blk.att.W_key.weight = _assign(blk.att.W_key.weight, k_w.T)
+        blk.att.W_value.weight = _assign(blk.att.W_value.weight, v_w.T)
+        blk.att.W_query.bias = _assign(blk.att.W_query.bias, q_b)
+        blk.att.W_key.bias = _assign(blk.att.W_key.bias, k_b)
+        blk.att.W_value.bias = _assign(blk.att.W_value.bias, v_b)
 
-        gpt.trf_blocks[b].norm1.scale = assign(
-            gpt.trf_blocks[b].norm1.scale, block["ln_1"]["g"])
-        gpt.trf_blocks[b].norm1.shift = assign(
-            gpt.trf_blocks[b].norm1.shift, block["ln_1"]["b"])
-        gpt.trf_blocks[b].norm2.scale = assign(
-            gpt.trf_blocks[b].norm2.scale, block["ln_2"]["g"])
-        gpt.trf_blocks[b].norm2.shift = assign(
-            gpt.trf_blocks[b].norm2.shift, block["ln_2"]["b"])
+        blk.att.out_proj.weight = _assign(blk.att.out_proj.weight, sd[p + "attn.c_proj.weight"].T)
+        blk.att.out_proj.bias = _assign(blk.att.out_proj.bias, sd[p + "attn.c_proj.bias"])
 
-    gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
-    gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
-    gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
+        blk.ff.layers[0].weight = _assign(blk.ff.layers[0].weight, sd[p + "mlp.c_fc.weight"].T)
+        blk.ff.layers[0].bias = _assign(blk.ff.layers[0].bias, sd[p + "mlp.c_fc.bias"])
+        blk.ff.layers[2].weight = _assign(blk.ff.layers[2].weight, sd[p + "mlp.c_proj.weight"].T)
+        blk.ff.layers[2].bias = _assign(blk.ff.layers[2].bias, sd[p + "mlp.c_proj.bias"])
+
+        blk.norm1.scale = _assign(blk.norm1.scale, sd[p + "ln_1.weight"])
+        blk.norm1.shift = _assign(blk.norm1.shift, sd[p + "ln_1.bias"])
+        blk.norm2.scale = _assign(blk.norm2.scale, sd[p + "ln_2.weight"])
+        blk.norm2.shift = _assign(blk.norm2.shift, sd[p + "ln_2.bias"])
+
+    gpt.final_norm.scale = _assign(gpt.final_norm.scale, sd["transformer.ln_f.weight"])
+    gpt.final_norm.shift = _assign(gpt.final_norm.shift, sd["transformer.ln_f.bias"])
+    gpt.out_head.weight = _assign(gpt.out_head.weight, sd["transformer.wte.weight"])
+    return gpt

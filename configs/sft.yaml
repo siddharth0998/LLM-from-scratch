@@ -1,0 +1,21 @@
+base_model: gpt2            # gpt2 | gpt2-medium | gpt2-large | gpt2-xl
+context_length: 1024        # must be 1024 to match the OpenAI checkpoint
+
+# Data (produced by scripts/prepare_sft_data.py).
+data_dir: data/processed/alpaca
+max_length: 512             # truncate examples longer than this (tokens)
+
+# Optimization.
+batch_size: 8
+num_epochs: 2
+learning_rate: 5.0e-5
+weight_decay: 0.1
+warmup_ratio: 0.03
+min_lr: 1.0e-5
+grad_clip: 1.0
+
+# Logging / checkpoints.
+eval_freq: 50
+eval_iter: 5
+seed: 123
+checkpoint_path: checkpoints/gpt2-sft.pth
