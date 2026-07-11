@@ -7,7 +7,7 @@ from .utils import (
     generate_and_print_sample,
     get_device,
 )
-from .sft_trainer import train_sft, train_model_simple, save_checkpoint
+from .sft_trainer import train_sft, train_model_simple, save_checkpoint, load_checkpoint
 
 __all__ = [
     "calc_loss_batch",
@@ -18,4 +18,5 @@ __all__ = [
     "train_sft",
     "train_model_simple",
     "save_checkpoint",
+    "load_checkpoint",
 ]

@@ -19,3 +19,4 @@ eval_freq: 50
 eval_iter: 5
 seed: 123
 checkpoint_path: checkpoints/gpt2-sft.pth
+save_every: 2000

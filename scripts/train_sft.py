@@ -37,6 +37,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=str(REPO_ROOT / "configs/sft.yaml"))
     ap.add_argument("--smoke", action="store_true", help="Tiny overfit run.")
+    ap.add_argument("--resume", action="store_true",
+                    help="Resume from the last saved checkpoint if it exists.")
     args = ap.parse_args()
 
     with open(args.config, "r") as f:
@@ -70,6 +72,11 @@ def main():
         model.parameters(), lr=cfg["learning_rate"], weight_decay=cfg["weight_decay"]
     )
 
+    resume_from = None
+    if args.resume:
+        ck = Path(cfg["checkpoint_path"])
+        resume_from = str(ck.with_name("last_" + ck.name))
+
     history = train_sft(
         model, train_loader, val_loader, optimizer, device,
         num_epochs=cfg["num_epochs"], eval_freq=cfg["eval_freq"],
@@ -77,6 +84,7 @@ def main():
         start_context="<|user|>\nWhat is the capital of France?\n<|assistant|>\n",
         warmup_ratio=cfg["warmup_ratio"], min_lr=cfg["min_lr"],
         grad_clip=cfg["grad_clip"], checkpoint_path=cfg["checkpoint_path"],
+        resume_from=resume_from, save_every=cfg.get("save_every", 0),
     )
 
     print("Training complete. Best checkpoint at:", cfg["checkpoint_path"])

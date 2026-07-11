@@ -12,19 +12,60 @@ def _lr_at_step(step, total_steps, base_lr, warmup_steps, min_lr):
     progress = min(1.0, progress)
     return min_lr + 0.5 * (base_lr - min_lr) * (1 + math.cos(math.pi * progress))
 
+def save_checkpoint(path, model, optimizer=None, epoch=0, global_step=-1,
+                    best_val=float("inf")):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ckpt = {
+        "model": model.state_dict(),
+        "epoch": epoch,
+        "global_step": global_step,
+        "best_val": best_val,
+    }
+    if optimizer is not None:
+        ckpt["optimizer"] = optimizer.state_dict()
+    torch.save(ckpt, path)
+
+def load_checkpoint(path, model, optimizer=None, device="cpu"):
+    ckpt = torch.load(path, map_location=device)
+    if "model" not in ckpt:  # old format: just weights
+        model.load_state_dict(ckpt)
+        return {"epoch": 0, "global_step": -1, "best_val": float("inf")}
+    model.load_state_dict(ckpt["model"])
+    if optimizer is not None and "optimizer" in ckpt:
+        optimizer.load_state_dict(ckpt["optimizer"])
+    return {
+        "epoch": ckpt.get("epoch", 0),
+        "global_step": ckpt.get("global_step", -1),
+        "best_val": ckpt.get("best_val", float("inf")),
+    }
+
+def _last_path(checkpoint_path):
+    """Derive the 'latest' checkpoint path next to the 'best' one."""
+    p = Path(checkpoint_path)
+    return str(p.with_name("last_" + p.name))
+
 def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
               eval_freq=50, eval_iter=5, tokenizer=None, start_context=None,
               warmup_ratio=0.03, min_lr=1e-5, grad_clip=1.0,
-              checkpoint_path=None):
+              checkpoint_path=None, resume_from=None, save_every=0):
     train_losses, val_losses, track_lrs = [], [], []
-    tokens_seen, global_step = 0, -1
 
     base_lr = optimizer.param_groups[0]["lr"]
     total_steps = num_epochs * len(train_loader)
     warmup_steps = int(warmup_ratio * total_steps)
-    best_val = float("inf")
 
-    for epoch in range(num_epochs):
+    start_epoch, global_step, best_val = 0, -1, float("inf")
+    if resume_from is not None and Path(resume_from).exists():
+        meta = load_checkpoint(resume_from, model, optimizer, device)
+        start_epoch = meta["epoch"]
+        global_step = meta["global_step"]
+        best_val = meta["best_val"]
+        print(f"Resumed from {resume_from}: epoch {start_epoch}, step {global_step}, best_val {best_val:.3f}")
+
+    last_path = _last_path(checkpoint_path) if checkpoint_path else None
+
+    for epoch in range(start_epoch, num_epochs):
         model.train()
         for input_batch, target_batch in train_loader:
             global_step += 1
@@ -40,8 +81,6 @@ def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
 
-            tokens_seen += input_batch.numel()
-
             if global_step % eval_freq == 0:
                 train_loss, val_loss = evaluate_model(
                     model, train_loader, val_loader, device, eval_iter
@@ -56,18 +95,24 @@ def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
 
                 if checkpoint_path is not None and val_loss < best_val:
                     best_val = val_loss
-                    save_checkpoint(model, checkpoint_path)
-                    print(f"  saved checkpoint (val {val_loss:.3f}) -> {checkpoint_path}")
+                    save_checkpoint(checkpoint_path, model, optimizer,
+                                    epoch=epoch, global_step=global_step, best_val=best_val)
+                    print(f"  saved BEST (val {val_loss:.3f}) -> {checkpoint_path}")
+
+            if save_every and last_path is not None and global_step > 0 and global_step % save_every == 0:
+                save_checkpoint(last_path, model, optimizer,
+                                epoch=epoch, global_step=global_step, best_val=best_val)
+                print(f"  saved LAST (step {global_step}) -> {last_path}")
+
+        if last_path is not None:
+            save_checkpoint(last_path, model, optimizer,
+                            epoch=epoch + 1, global_step=global_step, best_val=best_val)
+            print(f"  saved LAST -> {last_path}")
 
         if tokenizer is not None and start_context is not None:
             generate_and_print_sample(model, tokenizer, device, start_context)
 
     return {"train_losses": train_losses, "val_losses": val_losses, "lrs": track_lrs}
-
-def save_checkpoint(model, path):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), path)
 
 def train_model_simple(model, train_loader, val_loader, optimizer, device,
                        num_epochs, eval_freq, eval_iter, start_context, tokenizer):
