@@ -13,7 +13,7 @@ def _lr_at_step(step, total_steps, base_lr, warmup_steps, min_lr):
     return min_lr + 0.5 * (base_lr - min_lr) * (1 + math.cos(math.pi * progress))
 
 def save_checkpoint(path, model, optimizer=None, epoch=0, global_step=-1,
-                    best_val=float("inf")):
+                    best_val=float("inf"), weights_only=False):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     ckpt = {
@@ -22,7 +22,7 @@ def save_checkpoint(path, model, optimizer=None, epoch=0, global_step=-1,
         "global_step": global_step,
         "best_val": best_val,
     }
-    if optimizer is not None:
+    if optimizer is not None and not weights_only:
         ckpt["optimizer"] = optimizer.state_dict()
     torch.save(ckpt, path)
 
@@ -81,6 +81,7 @@ def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
 
+            # Mid-epoch evals: monitoring only (no heavy Drive writes here).
             if global_step % eval_freq == 0:
                 train_loss, val_loss = evaluate_model(
                     model, train_loader, val_loader, device, eval_iter
@@ -93,17 +94,21 @@ def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
                     f"train {train_loss:.3f} | val {val_loss:.3f} | lr {lr:.2e}"
                 )
 
-                if checkpoint_path is not None and val_loss < best_val:
-                    best_val = val_loss
-                    save_checkpoint(checkpoint_path, model, optimizer,
-                                    epoch=epoch, global_step=global_step, best_val=best_val)
-                    print(f"  saved BEST (val {val_loss:.3f}) -> {checkpoint_path}")
-
+            # Periodic resumable snapshot (full state) for crash recovery.
             if save_every and last_path is not None and global_step > 0 and global_step % save_every == 0:
                 save_checkpoint(last_path, model, optimizer,
                                 epoch=epoch, global_step=global_step, best_val=best_val)
                 print(f"  saved LAST (step {global_step}) -> {last_path}")
 
+        # --- End of epoch: one eval, then save best (weights-only) if improved.
+        _, epoch_val = evaluate_model(model, train_loader, val_loader, device, eval_iter)
+        if checkpoint_path is not None and epoch_val < best_val:
+            best_val = epoch_val
+            save_checkpoint(checkpoint_path, model, epoch=epoch + 1,
+                            global_step=global_step, best_val=best_val, weights_only=True)
+            print(f"  saved BEST weights (val {epoch_val:.3f}) -> {checkpoint_path}")
+
+        # Resumable snapshot (full state) at epoch boundary.
         if last_path is not None:
             save_checkpoint(last_path, model, optimizer,
                             epoch=epoch + 1, global_step=global_step, best_val=best_val)
