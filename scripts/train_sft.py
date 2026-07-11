@@ -39,10 +39,33 @@ def main():
     ap.add_argument("--smoke", action="store_true", help="Tiny overfit run.")
     ap.add_argument("--resume", action="store_true",
                     help="Resume from the last saved checkpoint if it exists.")
+    # Optional overrides (applied in-memory only; the YAML file is NOT modified).
+    ap.add_argument("--batch-size", type=int)
+    ap.add_argument("--max-length", type=int)
+    ap.add_argument("--num-epochs", type=int)
+    ap.add_argument("--learning-rate", type=float)
+    ap.add_argument("--base-model")
+    ap.add_argument("--eval-freq", type=int)
+    ap.add_argument("--save-every", type=int)
     args = ap.parse_args()
 
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
+
+    # Apply CLI overrides without writing them back to the config file.
+    overrides = {
+        "batch_size": args.batch_size,
+        "max_length": args.max_length,
+        "num_epochs": args.num_epochs,
+        "learning_rate": args.learning_rate,
+        "base_model": args.base_model,
+        "eval_freq": args.eval_freq,
+        "save_every": args.save_every,
+    }
+    for key, val in overrides.items():
+        if val is not None:
+            cfg[key] = val
+            print(f"override: {key} = {val}")
 
     torch.manual_seed(cfg["seed"])
     device = get_device()
@@ -56,7 +79,11 @@ def main():
 
     if args.smoke:
         train_raw, val_raw = train_raw[:16], val_raw[:8]
-        cfg["num_epochs"], cfg["eval_freq"] = 20, 2
+        # Smoke defaults, unless the user explicitly overrode them on the CLI.
+        if args.num_epochs is None:
+            cfg["num_epochs"] = 20
+        if args.eval_freq is None:
+            cfg["eval_freq"] = 2
 
     train_ds = SFTDataset(train_raw, tokenizer, max_length=cfg["max_length"])
     val_ds = SFTDataset(val_raw, tokenizer, max_length=cfg["max_length"])
