@@ -48,7 +48,7 @@ def _last_path(checkpoint_path):
 def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
               eval_freq=50, eval_iter=5, tokenizer=None, start_context=None,
               warmup_ratio=0.03, min_lr=1e-5, grad_clip=1.0,
-              checkpoint_path=None, resume_from=None, save_every=0):
+              checkpoint_path=None, resume_from=None, save_every=0, best_every=0):
     train_losses, val_losses, track_lrs = [], [], []
 
     base_lr = optimizer.param_groups[0]["lr"]
@@ -93,6 +93,15 @@ def train_sft(model, train_loader, val_loader, optimizer, device, num_epochs,
                     f"Ep {epoch + 1} (Step {global_step:06d}): "
                     f"train {train_loss:.3f} | val {val_loss:.3f} | lr {lr:.2e}"
                 )
+
+            # Frequent BEST check: eval every best_every steps, save if improved.
+            if best_every and checkpoint_path is not None and global_step > 0 and global_step % best_every == 0:
+                _, val_now = evaluate_model(model, train_loader, val_loader, device, eval_iter)
+                if val_now < best_val:
+                    best_val = val_now
+                    save_checkpoint(checkpoint_path, model, epoch=epoch,
+                                    global_step=global_step, best_val=best_val, weights_only=True)
+                    print(f"  saved BEST weights (val {val_now:.3f}, step {global_step}) -> {checkpoint_path}")
 
             # Periodic resumable snapshot (full state) for crash recovery.
             if save_every and last_path is not None and global_step > 0 and global_step % save_every == 0:

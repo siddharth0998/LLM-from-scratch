@@ -47,6 +47,7 @@ def main():
     ap.add_argument("--base-model")
     ap.add_argument("--eval-freq", type=int)
     ap.add_argument("--save-every", type=int)
+    ap.add_argument("--best-every", type=int)
     args = ap.parse_args()
 
     with open(args.config, "r") as f:
@@ -61,6 +62,7 @@ def main():
         "base_model": args.base_model,
         "eval_freq": args.eval_freq,
         "save_every": args.save_every,
+        "best_every": args.best_every,
     }
     for key, val in overrides.items():
         if val is not None:
@@ -112,6 +114,7 @@ def main():
         warmup_ratio=cfg["warmup_ratio"], min_lr=cfg["min_lr"],
         grad_clip=cfg["grad_clip"], checkpoint_path=cfg["checkpoint_path"],
         resume_from=resume_from, save_every=cfg.get("save_every", 0),
+        best_every=cfg.get("best_every", 0),
     )
 
     print("Training complete. Best checkpoint at:", cfg["checkpoint_path"])

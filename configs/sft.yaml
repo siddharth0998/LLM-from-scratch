@@ -3,10 +3,10 @@ context_length: 1024        # must be 1024 to match the OpenAI checkpoint
 
 # Data (produced by scripts/prepare_sft_data.py).
 data_dir: data/processed/alpaca
-max_length: 512             # truncate examples longer than this (tokens)
+max_length: 256           # truncate examples longer than this (tokens)
 
 # Optimization.
-batch_size: 8
+batch_size: 24
 num_epochs: 2
 learning_rate: 5.0e-5
 weight_decay: 0.1
@@ -19,4 +19,5 @@ eval_freq: 50
 eval_iter: 5
 seed: 123
 checkpoint_path: checkpoints/gpt2-sft.pth
-save_every: 2000
+save_every: 1000        # snapshot last_ (resume) every N steps, plus at each epoch end
+best_every: 500         # check val & save best every N steps (0 = only per epoch)
