@@ -19,6 +19,7 @@ def calc_loss_batch(input_batch, target_batch, model, device, ignore_index=-100)
     )
     return loss
 
+@torch.no_grad()
 def calc_loss_loader(data_loader, model, device, num_batches=None):
     total_loss = 0.0
     if len(data_loader) == 0:

@@ -118,6 +118,13 @@ def main():
     )
 
     print("Training complete. Best checkpoint at:", cfg["checkpoint_path"])
+
+    # Save loss history so it can be plotted in the notebook.
+    history_path = Path(cfg["checkpoint_path"]).with_name("history.json")
+    import json as _json
+    _json.dump(history, open(history_path, "w"))
+    print(f"Loss history saved to: {history_path}")
+
     return history
 
 if __name__ == "__main__":

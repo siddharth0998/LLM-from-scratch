@@ -53,7 +53,8 @@ def main():
     collate = lambda b: sft_collate_fn(b, allowed_max_length=cfg["max_length"], device=device)
     test_loader = DataLoader(test_ds, batch_size=cfg["batch_size"], shuffle=False, collate_fn=collate)
 
-    test_loss = calc_loss_loader(test_loader, model, device)
+    with torch.no_grad():
+        test_loss = calc_loss_loader(test_loader, model, device)
     print(f"\nTest examples: {len(test_ds)}")
     print(f"Test loss (masked): {test_loss:.4f}")
 
