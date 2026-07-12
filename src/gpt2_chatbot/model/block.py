@@ -52,10 +52,30 @@ class TransformerBlock(nn.Module):
         self.norm2 = LayerNorm(cfg["emb_dim"])
         self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
 
-    def forward(self, x):
+    def forward(self, x, past_kv=None, use_cache=False):
+        # Default path: byte-for-byte identical to the original implementation.
+        # Preserved for training and all existing callers.
+        if not use_cache and past_kv is None:
+            shortcut = x
+            x = self.norm1(x)
+            x = self.att(x)
+            x = self.drop_shortcut(x)
+            x = x + shortcut
+
+            shortcut = x
+            x = self.norm2(x)
+            x = self.ff(x)
+            x = self.drop_shortcut(x)
+            x = x + shortcut
+
+            return x
+
+        # Caching path: forward past_kv to the attention sublayer and return
+        # the updated K/V alongside the block output. Residuals, LayerNorms,
+        # feed-forward, and dropout are unchanged.
         shortcut = x
         x = self.norm1(x)
-        x = self.att(x)
+        x, present_kv = self.att(x, past_kv=past_kv, use_cache=True)
         x = self.drop_shortcut(x)
         x = x + shortcut
 
@@ -65,4 +85,4 @@ class TransformerBlock(nn.Module):
         x = self.drop_shortcut(x)
         x = x + shortcut
 
-        return x
+        return x, present_kv

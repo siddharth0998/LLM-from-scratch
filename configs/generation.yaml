@@ -1,0 +1,12 @@
+# Inference / chat settings.
+base_model: gpt2
+context_length: 1024
+checkpoint_path: checkpoints/gpt2-sft.pth   # your fine-tuned model
+
+# Sampling.
+temperature: 0.9       # higher = more random, lower = more focused
+top_k: 20               # sample from the top-k tokens
+max_new_tokens: 256     # max length of a reply
+
+# Optional persona prepended to every conversation (or null).
+system_prompt: null

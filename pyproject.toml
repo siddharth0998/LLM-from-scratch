@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpt2-chatbot"
+version = "0.1.0"
+description = "A GPT-2 chatbot built from scratch (SFT on Alpaca, optional DPO)."
+readme = "README.md"
+requires-python = ">=3.9"
+
+# Core runtime dependencies (mirrors requirements.txt).
+dependencies = [
+    "torch>=2.0",
+    "tiktoken>=0.5",
+    "transformers>=4.40",   # pretrained GPT-2 weight loading
+    "pyyaml>=6.0",          # config files (configs/*.yaml)
+    "gradio>=4.0",          # web chat UI (serving/app_gradio.py)
+]
+
+[project.optional-dependencies]
+# Notebook / plotting extras: pip install -e ".[notebook]"
+notebook = [
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+    "tqdm>=4.66",
+]
+# Testing extras: pip install -e ".[test]"
+test = [
+    "pytest>=7.0",
+    "hypothesis>=6.0",
+]
+
+[project.scripts]
+# Run the Gradio web UI from anywhere after install: `gpt2-chat-web`
+gpt2-chat-web = "gpt2_chatbot.serving.app_gradio:main"
+
+# src/ layout: packages live under src/, not the repo root.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

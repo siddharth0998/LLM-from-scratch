@@ -1,0 +1,15 @@
+services:
+  chatbot:
+    build: .
+    image: gpt2-chatbot:latest
+    container_name: gpt2-chatbot
+    ports:
+      - "7860:7860"
+    environment:
+      # Override the checkpoint without rebuilding, if you like.
+      - CHECKPOINT=checkpoints/gpt2-sft.pth
+    # Uncomment to iterate on configs/checkpoints without rebuilding the image:
+    # volumes:
+    #   - ./configs:/app/configs
+    #   - ./checkpoints:/app/checkpoints
+    restart: unless-stopped
