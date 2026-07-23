@@ -31,3 +31,6 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Kiro spec files (planning/design docs, kept local)
+.kiro/specs/
